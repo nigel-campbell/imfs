@@ -39,7 +39,24 @@ func NewShell() *Shell {
 }
 
 func (s *Shell) Ls() []string {
-	panic("implement me!")
+	if s.Cwd == nil {
+		return nil
+	}
+
+	// Create a slice to hold the names
+	names := make([]string, 0, len(s.Cwd.Children))
+
+	// Add all children names to the slice and print them
+	for _, child := range s.Cwd.Children {
+		names = append(names, child.Name)
+		if child.IsDirectory {
+			fmt.Printf("%s/\n", child.Name)
+		} else {
+			fmt.Println(child.Name)
+		}
+	}
+
+	return names
 }
 
 func (s *Shell) Cd(name string) {
@@ -64,10 +81,13 @@ func (s *Shell) Cd(name string) {
 			return
 		}
 	}
+
+	fmt.Printf("cd: no such directory: %s\n", name)
 }
 
 func (s *Shell) Pwd() string {
 	if s.Cwd == s.Root {
+		fmt.Println("/")
 		return "/"
 	}
 
@@ -77,7 +97,9 @@ func (s *Shell) Pwd() string {
 		path = current.Name + "/" + path
 		current = current.Parent
 	}
-	return "/" + path
+	path = "/" + path
+	fmt.Println(path)
+	return path
 }
 
 func (s *Shell) RedirectWrite(filename, content string, shouldAppend bool) {
@@ -276,6 +298,19 @@ func (s *Shell) Remove(name string, recursive bool) {
 
 	// Remove from parent's children
 	s.Cwd.Children = append(s.Cwd.Children[:targetIndex], s.Cwd.Children[targetIndex+1:]...)
+}
+
+// resolvePath resolves a path relative to the current working directory.
+// It handles:
+// - Absolute paths (starting with '/')
+// - Relative paths with directory separators
+// - Parent directory references ('..')
+// Returns the target directory and the final component of the path.
+// If the path is invalid or doesn't exist, returns nil, "".
+func (s *Shell) resolvePath(path string) (*File, string) {
+	// NB: Do not use an LLM to generate this or attempt to handwrite this.
+	// Path resolution is a hard problem. Use the `path` package.
+	panic("implement me!")
 }
 
 func (s *Shell) Run() {

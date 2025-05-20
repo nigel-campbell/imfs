@@ -235,3 +235,57 @@ func TestFind(t *testing.T) {
 	result = shell.Find("test")
 	assertEqual(t, "/other/test1.txt", result, "Expected to find first partial match")
 }
+
+func TestList(t *testing.T) {
+	shell := NewShell()
+
+	// Test empty directory
+	files := shell.Ls()
+	assertEqual(t, 0, len(files), "Expected empty directory to return no files")
+
+	// Test directory with files and subdirectories
+	shell.RedirectWrite("file1.txt", "content1", false)
+	shell.RedirectWrite("file2.txt", "content2", false)
+	shell.Mkdir("dir1")
+	shell.Mkdir("dir2")
+
+	files = shell.Ls()
+	assertEqual(t, 4, len(files), "Expected 4 items in directory")
+
+	// Verify all items are present
+	expected := map[string]bool{
+		"file1.txt": true,
+		"file2.txt": true,
+		"dir1":      true,
+		"dir2":      true,
+	}
+	for _, file := range files {
+		assertEqual(t, true, expected[file], "Unexpected file in listing: "+file)
+	}
+
+	// Test listing subdirectory
+	shell.Cd("dir1")
+	shell.RedirectWrite("nested.txt", "nested content", false)
+	files = shell.Ls()
+	assertEqual(t, 1, len(files), "Expected 1 item in subdirectory")
+	assertEqual(t, "nested.txt", files[0], "Expected nested.txt in subdirectory")
+
+	// Test listing after removing files
+	shell.Cd("..")
+	shell.Remove("file1.txt", false)
+	files = shell.Ls()
+	assertEqual(t, 3, len(files), "Expected 3 items after removal")
+
+	// Verify remaining items
+	expected = map[string]bool{
+		"file2.txt": true,
+		"dir1":      true,
+		"dir2":      true,
+	}
+	for _, file := range files {
+		assertEqual(t, true, expected[file], "Unexpected file in listing after removal: "+file)
+	}
+}
+
+func TestPathResolution(t *testing.T) {
+}
