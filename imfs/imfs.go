@@ -42,10 +42,86 @@ func (s *Shell) Ls() []string {
 	panic("implement me!")
 }
 
-func (s *Shell) Cd(name string) {}
+func (s *Shell) Cd(name string) {
+	if name == "" {
+		return
+	}
+
+	switch name {
+	case "/":
+		s.Cwd = s.Root
+		return
+	case "..":
+		if s.Cwd.Parent != nil {
+			s.Cwd = s.Cwd.Parent
+		}
+		return
+	}
+
+	for _, child := range s.Cwd.Children {
+		if child.Name == name && child.IsDirectory {
+			s.Cwd = child
+			return
+		}
+	}
+}
 
 func (s *Shell) Pwd() string {
-	panic("implement me!")
+	if s.Cwd == s.Root {
+		return "/"
+	}
+
+	path := s.Cwd.Name
+	current := s.Cwd.Parent
+	for current != nil && current != s.Root {
+		path = current.Name + "/" + path
+		current = current.Parent
+	}
+	return "/" + path
+}
+
+func (s *Shell) RedirectWrite(filename, content string, shouldAppend bool) {
+	if filename == "" {
+		return
+	}
+
+	var targetFile *File
+	for _, child := range s.Cwd.Children {
+		if child.Name == filename {
+			if child.IsDirectory {
+				return // Can't write to a directory
+			}
+			targetFile = child
+			break
+		}
+	}
+
+	if targetFile == nil {
+		// Check if there's a directory with this name before creating a new file
+		for _, child := range s.Cwd.Children {
+			if child.Name == filename && child.IsDirectory {
+				return // Can't create a file with the same name as a directory
+			}
+		}
+
+		targetFile = &File{
+			Name:        filename,
+			IsDirectory: false,
+			CreatedAt:   time.Now(),
+			ModifiedAt:  time.Now(),
+			Parent:      s.Cwd,
+		}
+		s.Cwd.Children = append(s.Cwd.Children, targetFile)
+	}
+
+	if shouldAppend {
+		targetFile.Content = append(targetFile.Content, []byte(content)...)
+	} else {
+		targetFile.Content = []byte(content)
+	}
+
+	targetFile.Size = int64(len(targetFile.Content))
+	targetFile.ModifiedAt = time.Now()
 }
 
 func (s *Shell) Move(source, dest string) {
@@ -57,23 +133,149 @@ func (s *Shell) Copy(source, dest string) {
 }
 
 func (s *Shell) Mkdir(name string) {
-	panic("implement me!")
+	if name == "" {
+		fmt.Println("Usage: mkdir <directory_name>")
+		return
+	}
+
+	// Check if directory already exists
+	for _, child := range s.Cwd.Children {
+		if child.Name == name {
+			return
+		}
+	}
+
+	// Create new directory
+	newDir := &File{
+		Name:        name,
+		IsDirectory: true,
+		CreatedAt:   time.Now(),
+		ModifiedAt:  time.Now(),
+		Parent:      s.Cwd,
+	}
+
+	// Add to parent's children
+	s.Cwd.Children = append(s.Cwd.Children, newDir)
 }
 
 func (s *Shell) Touch(name string) {
-	panic("implement me!")
+	if name == "" {
+		fmt.Println("Usage: touch <file_name>")
+		return
+	}
+
+	// TODO(nigel): Replace with a map.
+	for _, child := range s.Cwd.Children {
+		if child.Name == name {
+			// Update modification time if file exists
+			// TODO(nigel): Is this necessary?
+			child.ModifiedAt = time.Now()
+			return
+		}
+	}
+
+	newFile := &File{
+		Name:        name,
+		IsDirectory: false,
+		CreatedAt:   time.Now(),
+		ModifiedAt:  time.Now(),
+		Parent:      s.Cwd,
+	}
+	s.Cwd.Children = append(s.Cwd.Children, newFile)
 }
 
 func (s *Shell) Cat(name string) string {
-	panic("implement me!")
+	if name == "" {
+		return ""
+	}
+
+	// Handle parent directory navigation
+	if strings.HasPrefix(name, "../") {
+		if s.Cwd.Parent == nil {
+			return ""
+		}
+		// Save current directory
+		current := s.Cwd
+		// Move to parent
+		s.Cwd = s.Cwd.Parent
+		// Get content
+		content := s.Cat(strings.TrimPrefix(name, "../"))
+		// Restore current directory
+		s.Cwd = current
+		return content
+	}
+
+	// Find the file
+	for _, child := range s.Cwd.Children {
+		if child.Name == name {
+			if child.IsDirectory {
+				return ""
+			}
+			return string(child.Content)
+		}
+	}
+
+	return ""
 }
 
 func (s *Shell) Find(name string) string {
-	panic("implement me!")
+	if name == "" {
+		return ""
+	}
+
+	// Helper function to search a directory
+	var searchDir func(dir *File, currentPath string) string
+	searchDir = func(dir *File, currentPath string) string {
+		// Check children of current directory
+		for _, child := range dir.Children {
+			childPath := currentPath + "/" + child.Name
+			// Check if this is a match
+			if strings.Contains(child.Name, name) {
+				return childPath
+			}
+			// If it's a directory, search it
+			if child.IsDirectory {
+				if result := searchDir(child, childPath); result != "" {
+					return result
+				}
+			}
+		}
+		return ""
+	}
+
+	// Start search from root
+	return searchDir(s.Root, "")
 }
 
 func (s *Shell) Remove(name string, recursive bool) {
-	panic("implement me!")
+	if name == "" {
+		fmt.Println("Usage: remove <name> [recursive]")
+		return
+	}
+
+	// Find the file/directory to remove
+	var target *File
+	var targetIndex int
+	for i, child := range s.Cwd.Children {
+		if child.Name == name {
+			target = child
+			targetIndex = i
+			break
+		}
+	}
+
+	if target == nil {
+		return // File/directory doesn't exist
+	}
+
+	// Check if trying to remove a non-empty directory without recursive flag
+	if target.IsDirectory && len(target.Children) > 0 && !recursive {
+		fmt.Printf("Cannot remove '%s': Directory not empty\n", name)
+		return
+	}
+
+	// Remove from parent's children
+	s.Cwd.Children = append(s.Cwd.Children[:targetIndex], s.Cwd.Children[targetIndex+1:]...)
 }
 
 func (s *Shell) Run() {
