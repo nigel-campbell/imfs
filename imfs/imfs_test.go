@@ -508,6 +508,38 @@ func TestMove(t *testing.T) {
 		}
 	}
 	assertEqual(t, 0, fileCount, "Expected source.txt to be removed from original location")
+
+	// Test moving a file into parent directory
+	shell.Mkdir("parent_test", false)
+	shell.Cd("parent_test")
+	shell.Touch("child.txt")
+	shell.RedirectWrite("child.txt", "child content", false)
+	shell.Move("child.txt", "../")
+
+	// Verify file was moved to parent directory
+	shell.Cd("..")
+	fileCount = 0
+	var movedFileName string
+	for _, child := range shell.Cwd.Children {
+		if !child.IsDirectory && child.Name == "child.txt" {
+			fileCount++
+			movedFileName = child.Name
+		}
+	}
+	assertEqual(t, 1, fileCount, "Expected one file in parent directory")
+	assertEqual(t, "child.txt", movedFileName, "Expected child.txt in parent directory")
+
+	// Verify file content was preserved
+	for _, child := range shell.Cwd.Children {
+		if child.Name == "child.txt" {
+			assertEqual(t, "child content", string(child.Content), "Expected file content to be preserved")
+			break
+		}
+	}
+
+	// Verify file was removed from original directory
+	shell.Cd("parent_test")
+	assertEqual(t, 0, len(shell.Cwd.Children), "Expected no files in original directory")
 }
 
 func TestCopy(t *testing.T) {

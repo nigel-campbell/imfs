@@ -214,7 +214,7 @@ func (s *Shell) Move(source, dest string) {
 	currentDir := s.Cwd
 
 	// Navigate to the target directory, but DO NOT create directories
-	for i := 0; i < len(components)-1; i++ {
+	for i := 0; i < len(components); i++ {
 		component := components[i]
 		if component == "" {
 			continue
@@ -225,6 +225,61 @@ func (s *Shell) Move(source, dest string) {
 				currentDir = currentDir.Parent
 			}
 			continue
+		}
+
+		// If this is the last component and it's not "..", check if it's a directory
+		if i == len(components)-1 {
+			var destDir *File
+			for _, child := range currentDir.Children {
+				if child.Name == component && child.IsDirectory {
+					destDir = child
+					break
+				}
+			}
+
+			if destDir != nil {
+				// Move into this directory, keep original name
+				for _, c := range destDir.Children {
+					if c.Name == sourceFile.Name {
+						s.Cwd = originalCwd
+						return // Target already exists
+					}
+				}
+				// Remove source from its current location
+				originalCwd.Children = append(originalCwd.Children[:sourceIndex], originalCwd.Children[sourceIndex+1:]...)
+				sourceFile.Parent = destDir
+				destDir.Children = append(destDir.Children, sourceFile)
+				s.Cwd = originalCwd
+				return
+			}
+
+			// Check if target already exists
+			for _, child := range currentDir.Children {
+				if child.Name == component {
+					s.Cwd = originalCwd
+					return // Target already exists
+				}
+			}
+
+			// If we're moving to the same location with the same name, do nothing
+			if currentDir == originalCwd && component == sourceFile.Name {
+				s.Cwd = originalCwd
+				return
+			}
+
+			// Remove source from its current location
+			originalCwd.Children = append(originalCwd.Children[:sourceIndex], originalCwd.Children[sourceIndex+1:]...)
+
+			// Update source's parent and name
+			sourceFile.Parent = currentDir
+			sourceFile.Name = component
+
+			// Add source to new location
+			currentDir.Children = append(currentDir.Children, sourceFile)
+
+			// Restore original directory
+			s.Cwd = originalCwd
+			return
 		}
 
 		found := false
@@ -242,59 +297,20 @@ func (s *Shell) Move(source, dest string) {
 		}
 	}
 
-	// Get the final component (target name)
-	targetName := components[len(components)-1]
-
-	// Check if the destination is an existing directory
-	var destDir *File
-	for _, child := range currentDir.Children {
-		if child.Name == targetName && child.IsDirectory {
-			destDir = child
-			break
-		}
-	}
-
-	if destDir != nil {
-		// Move into this directory, keep original name
-		for _, c := range destDir.Children {
-			if c.Name == sourceFile.Name {
-				s.Cwd = originalCwd
-				return // Target already exists
-			}
-		}
-		// Remove source from its current location
-		originalCwd.Children = append(originalCwd.Children[:sourceIndex], originalCwd.Children[sourceIndex+1:]...)
-		sourceFile.Parent = destDir
-		destDir.Children = append(destDir.Children, sourceFile)
-		s.Cwd = originalCwd
-		return
-	}
-
-	if targetName == "" {
-		s.Cwd = originalCwd
-		return
-	}
-
+	// If we get here, we're moving to the current directory
 	// Check if target already exists
 	for _, child := range currentDir.Children {
-		if child.Name == targetName {
+		if child.Name == sourceFile.Name {
 			s.Cwd = originalCwd
 			return // Target already exists
 		}
 	}
 
-	// If we're moving to the same location with the same name, do nothing
-	if currentDir == originalCwd && targetName == sourceFile.Name {
-		s.Cwd = originalCwd
-		return
-	}
-
 	// Remove source from its current location
 	originalCwd.Children = append(originalCwd.Children[:sourceIndex], originalCwd.Children[sourceIndex+1:]...)
 
-	// Update source's parent and name
+	// Update source's parent
 	sourceFile.Parent = currentDir
-	sourceFile.Name = targetName
 
 	// Add source to new location
 	currentDir.Children = append(currentDir.Children, sourceFile)
