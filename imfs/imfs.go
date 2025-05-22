@@ -275,7 +275,101 @@ func (s *Shell) Move(source, dest string) {
 }
 
 func (s *Shell) Copy(source, dest string) {
-	panic("implement me!")
+	if source == "" || dest == "" {
+		return
+	}
+
+	// Save current directory
+	originalCwd := s.Cwd
+
+	// Find source file/directory
+	var sourceFile *File
+	for _, child := range s.Cwd.Children {
+		if child.Name == source {
+			sourceFile = child
+			break
+		}
+	}
+
+	if sourceFile == nil {
+		return // Source doesn't exist
+	}
+
+	// Handle absolute paths
+	if strings.HasPrefix(dest, "/") {
+		s.Cwd = s.Root
+		dest = dest[1:]
+	}
+
+	// Split destination path into components
+	components := strings.Split(dest, "/")
+	lastComponent := components[len(components)-1]
+	components = components[:len(components)-1]
+
+	// Navigate to destination directory
+	for _, component := range components {
+		if component == "" {
+			continue
+		}
+
+		if component == ".." {
+			if s.Cwd.Parent != nil {
+				s.Cwd = s.Cwd.Parent
+			}
+			continue
+		}
+
+		found := false
+		for _, child := range s.Cwd.Children {
+			if child.Name == component && child.IsDirectory {
+				s.Cwd = child
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			// Destination directory doesn't exist
+			s.Cwd = originalCwd
+			return
+		}
+	}
+
+	// Create a deep copy of the source file/directory
+	var copyFile func(*File) *File
+	copyFile = func(f *File) *File {
+		newFile := &File{
+			Name:        f.Name,
+			Size:        f.Size,
+			CreatedAt:   time.Now(),
+			ModifiedAt:  time.Now(),
+			IsDirectory: f.IsDirectory,
+			Content:     make([]byte, len(f.Content)),
+			Parent:      s.Cwd,
+		}
+		copy(newFile.Content, f.Content)
+
+		if f.IsDirectory {
+			newFile.Children = make([]*File, 0, len(f.Children))
+			for _, child := range f.Children {
+				newChild := copyFile(child)
+				newChild.Parent = newFile
+				newFile.Children = append(newFile.Children, newChild)
+			}
+		}
+
+		return newFile
+	}
+
+	// Create the copy with the new name
+	newFile := copyFile(sourceFile)
+	newFile.Name = lastComponent
+
+	// Add the copy to the destination directory
+	s.Cwd.Children = append(s.Cwd.Children, newFile)
+
+	// Restore original working directory
+	s.Cwd = originalCwd
 }
 
 func (s *Shell) Mkdir(name string) {
@@ -494,9 +588,35 @@ func (s *Shell) Run() {
 		case "touch":
 			s.Touch(arg)
 		case "cat":
-			s.Cat(arg)
+			fmt.Println(s.Cat(arg))
 		case "clear":
 			s.Clear()
+		case "move":
+			parts := strings.SplitN(arg, " ", 2)
+			if len(parts) == 2 {
+				s.Move(parts[0], parts[1])
+			} else {
+				fmt.Println("Usage: move <source> <destination>")
+			}
+		case "copy":
+			parts := strings.SplitN(arg, " ", 2)
+			if len(parts) == 2 {
+				s.Copy(parts[0], parts[1])
+			} else {
+				fmt.Println("Usage: copy <source> <destination>")
+			}
+		case "find":
+			if result := s.Find(arg); result != "" {
+				fmt.Println(result)
+			}
+		case "rm":
+			parts := strings.SplitN(arg, " ", 2)
+			recursive := false
+			if len(parts) == 2 && parts[1] == "-r" {
+				recursive = true
+				arg = parts[0]
+			}
+			s.Remove(arg, recursive)
 		default:
 			fmt.Println("Unknown command:", cmd)
 		}

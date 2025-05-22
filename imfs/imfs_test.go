@@ -443,3 +443,78 @@ func TestMove(t *testing.T) {
 	assertEqual(t, "nested.txt", shell.Cwd.Children[0].Name, "Expected nested.txt in moved dir3")
 	assertEqual(t, "nested content", string(shell.Cwd.Children[0].Content), "Expected nested file content to be preserved")
 }
+
+func TestCopy(t *testing.T) {
+	shell := NewShell()
+
+	// Test copying a file
+	shell.Touch("file1.txt")
+	shell.RedirectWrite("file1.txt", "test content", false)
+	shell.Copy("file1.txt", "file1_copy.txt")
+
+	// Verify original and copy exist
+	assertEqual(t, 2, len(shell.Cwd.Children), "Expected two files in root directory")
+	var originalContent, copyContent string
+	for _, child := range shell.Cwd.Children {
+		if child.Name == "file1.txt" {
+			originalContent = string(child.Content)
+		} else if child.Name == "file1_copy.txt" {
+			copyContent = string(child.Content)
+		}
+	}
+	assertEqual(t, "test content", originalContent, "Expected original file content to be preserved")
+	assertEqual(t, "test content", copyContent, "Expected copied file to have same content")
+
+	// Test copying to a subdirectory
+	shell.Mkdir("dir1")
+	shell.Copy("file1.txt", "dir1/file1.txt")
+	shell.Cd("dir1")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in dir1")
+	assertEqual(t, "test content", string(shell.Cwd.Children[0].Content), "Expected copied file in subdirectory to have same content")
+
+	// Test copying a directory
+	shell.Cd("/")
+	shell.Mkdir("dir2")
+	shell.Cd("dir2")
+	shell.Touch("nested.txt")
+	shell.RedirectWrite("nested.txt", "nested content", false)
+	shell.Cd("/")
+	shell.Copy("dir2", "dir2_copy")
+
+	// Verify directory and its contents were copied correctly
+	shell.Cd("dir2_copy")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in copied directory")
+	assertEqual(t, "nested.txt", shell.Cwd.Children[0].Name, "Expected nested.txt in copied directory")
+	assertEqual(t, "nested content", string(shell.Cwd.Children[0].Content), "Expected nested file content to be preserved")
+
+	// Test copying non-existent file/directory
+	shell.Cd("/")
+	shell.Copy("nonexistent.txt", "copy.txt")
+	fileCount := 0
+	for _, child := range shell.Cwd.Children {
+		if !child.IsDirectory {
+			fileCount++
+		}
+	}
+	assertEqual(t, 2, fileCount, "Expected no new file to be created for non-existent source")
+
+	// Test copying to non-existent destination directory
+	shell.Copy("file1.txt", "nonexistent/file1.txt")
+	fileCount = 0
+	for _, child := range shell.Cwd.Children {
+		if !child.IsDirectory {
+			fileCount++
+		}
+	}
+	assertEqual(t, 2, fileCount, "Expected no new file to be created when destination directory doesn't exist")
+
+	// Test copying a file to its current location (should create a copy)
+	shell.Copy("file1.txt", "file1.txt")
+	fileCount = 0
+	for _, child := range shell.Cwd.Children {
+		if !child.IsDirectory {
+			fileCount++
+		}
+	}
+	assertEqual(t, 3, fileCount, "Expected a new copy to be created when copying to same location")
+}
