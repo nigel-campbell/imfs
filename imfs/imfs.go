@@ -727,6 +727,20 @@ func (s *Shell) Run() {
 				arg = parts[0]
 			}
 			s.Remove(arg, recursive)
+		case "write":
+			parts := strings.SplitN(arg, " ", 2)
+			if len(parts) == 2 {
+				s.RedirectWrite(parts[0], parts[1], false)
+			} else {
+				fmt.Println("Usage: write <file> <content>")
+			}
+		case "append":
+			parts := strings.SplitN(arg, " ", 2)
+			if len(parts) == 2 {
+				s.RedirectWrite(parts[0], parts[1], true)
+			} else {
+				fmt.Println("Usage: append <file> <content>")
+			}
 		default:
 			fmt.Println("Unknown command:", cmd)
 		}
