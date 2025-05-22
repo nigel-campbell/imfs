@@ -372,27 +372,87 @@ func (s *Shell) Copy(source, dest string) {
 	s.Cwd = originalCwd
 }
 
-func (s *Shell) Mkdir(name string) {
+func (s *Shell) Mkdir(name string, createParents bool) {
 	if name == "" {
-		fmt.Println("Usage: mkdir <directory_name>")
+		fmt.Println("Usage: mkdir [-p] <directory_name>")
 		return
 	}
 
-	for _, child := range s.Cwd.Children {
-		if child.Name == name {
+	// Handle absolute paths
+	if strings.HasPrefix(name, "/") {
+		s.Cwd = s.Root
+		name = name[1:]
+		if name == "" {
 			return
 		}
 	}
 
+	components := strings.Split(name, "/")
+	currentDir := s.Cwd
+
+	// Navigate to the target directory
+	for i := 0; i < len(components)-1; i++ {
+		component := components[i]
+		if component == "" {
+			continue
+		}
+
+		if component == ".." {
+			if currentDir.Parent != nil {
+				currentDir = currentDir.Parent
+			}
+			continue
+		}
+
+		found := false
+		for _, child := range currentDir.Children {
+			if child.Name == component && child.IsDirectory {
+				currentDir = child
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			if !createParents {
+				fmt.Printf("mkdir: no such directory: %s\n", name)
+				return
+			}
+			// Create the parent directory
+			newDir := &File{
+				Name:        component,
+				IsDirectory: true,
+				CreatedAt:   time.Now(),
+				ModifiedAt:  time.Now(),
+				Parent:      currentDir,
+			}
+			currentDir.Children = append(currentDir.Children, newDir)
+			currentDir = newDir
+		}
+	}
+
+	// Get the final component (directory name)
+	dirname := components[len(components)-1]
+	if dirname == "" {
+		return
+	}
+
+	// Check if directory already exists
+	for _, child := range currentDir.Children {
+		if child.Name == dirname {
+			return
+		}
+	}
+
+	// Create new directory
 	newDir := &File{
-		Name:        name,
+		Name:        dirname,
 		IsDirectory: true,
 		CreatedAt:   time.Now(),
 		ModifiedAt:  time.Now(),
-		Parent:      s.Cwd,
+		Parent:      currentDir,
 	}
-
-	s.Cwd.Children = append(s.Cwd.Children, newDir)
+	currentDir.Children = append(currentDir.Children, newDir)
 }
 
 func (s *Shell) Touch(name string) {
@@ -584,7 +644,12 @@ func (s *Shell) Run() {
 		case "pwd":
 			fmt.Println(s.Pwd())
 		case "mkdir":
-			s.Mkdir(arg)
+			createParents := false
+			if strings.HasPrefix(arg, "-p ") {
+				createParents = true
+				arg = strings.TrimPrefix(arg, "-p ")
+			}
+			s.Mkdir(arg, createParents)
 		case "touch":
 			s.Touch(arg)
 		case "cat":

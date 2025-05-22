@@ -17,7 +17,7 @@ func TestChangeDirectory(t *testing.T) {
 	shell.Cd("nonexistent")
 	assertEqual(t, shell.Root, shell.Cwd, "Expected to stay in root directory when changing to non-existent directory")
 
-	shell.Mkdir("testdir")
+	shell.Mkdir("testdir", false)
 	shell.Cd("testdir")
 	assertEqual(t, "testdir", shell.Cwd.Name, "Expected to change to 'testdir'")
 
@@ -33,11 +33,11 @@ func TestGetWorkingDirectory(t *testing.T) {
 
 	assertEqual(t, "/", shell.Pwd(), "Expected root directory path to be '/'")
 
-	shell.Mkdir("testdir")
+	shell.Mkdir("testdir", false)
 	shell.Cd("testdir")
 	assertEqual(t, "/testdir", shell.Pwd(), "Expected path to be '/testdir'")
 
-	shell.Mkdir("nested")
+	shell.Mkdir("nested", false)
 	shell.Cd("nested")
 	assertEqual(t, "/testdir/nested", shell.Pwd(), "Expected path to be '/testdir/nested'")
 
@@ -49,24 +49,67 @@ func TestMakeDirectory(t *testing.T) {
 	shell := NewShell()
 
 	// Test creating a simple directory
-	shell.Mkdir("testdir")
+	shell.Mkdir("testdir", false)
 	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one child directory")
 	assertEqual(t, "testdir", shell.Cwd.Children[0].Name, "Expected directory name to be 'testdir'")
 	assertEqual(t, true, shell.Cwd.Children[0].IsDirectory, "Expected IsDirectory to be true")
 
 	// Test creating a nested directory
 	shell.Cd("testdir")
-	shell.Mkdir("nested")
+	shell.Mkdir("nested", false)
 	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one child directory in nested location")
 	assertEqual(t, "nested", shell.Cwd.Children[0].Name, "Expected nested directory name to be 'nested'")
 
 	// Test creating duplicate directory (should be idempotent)
-	shell.Mkdir("nested")
+	shell.Mkdir("nested", false)
 	assertEqual(t, 1, len(shell.Cwd.Children), "Expected no new directory to be created for duplicate")
 
 	// Test creating directory with empty name
-	shell.Mkdir("")
+	shell.Mkdir("", false)
 	assertEqual(t, 1, len(shell.Cwd.Children), "Expected no new directory to be created for empty name")
+
+	// Reset shell for new tests
+	shell = NewShell()
+
+	// Test creating nested directories with -p
+	shell.Mkdir("a/b/c", true)
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one child directory 'a'")
+	assertEqual(t, "a", shell.Cwd.Children[0].Name, "Expected directory name to be 'a'")
+
+	// Navigate to verify nested structure
+	shell.Cd("a")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one child directory 'b'")
+	assertEqual(t, "b", shell.Cwd.Children[0].Name, "Expected directory name to be 'b'")
+
+	shell.Cd("b")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one child directory 'c'")
+	assertEqual(t, "c", shell.Cwd.Children[0].Name, "Expected directory name to be 'c'")
+
+	// Reset shell for absolute path test
+	shell = NewShell()
+
+	// Test creating nested directories with absolute path
+	shell.Mkdir("/x/y/z", true)
+	assertEqual(t, 1, len(shell.Root.Children), "Expected one child directory 'x' in root")
+	assertEqual(t, "x", shell.Root.Children[0].Name, "Expected directory name to be 'x'")
+
+	// Navigate to verify nested structure
+	shell.Cd("/x")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one child directory 'y'")
+	assertEqual(t, "y", shell.Cwd.Children[0].Name, "Expected directory name to be 'y'")
+
+	shell.Cd("y")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one child directory 'z'")
+	assertEqual(t, "z", shell.Cwd.Children[0].Name, "Expected directory name to be 'z'")
+
+	// Test creating directory with -p when parent exists
+	shell = NewShell()
+	shell.Mkdir("existing", false)
+	shell.Mkdir("existing/nested", true)
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one child directory 'existing'")
+	shell.Cd("existing")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one child directory 'nested'")
+	assertEqual(t, "nested", shell.Cwd.Children[0].Name, "Expected directory name to be 'nested'")
 }
 
 func TestRemoveDirectory(t *testing.T) {
@@ -77,14 +120,14 @@ func TestRemoveDirectory(t *testing.T) {
 	assertEqual(t, 0, len(shell.Cwd.Children), "Expected no children in root directory")
 
 	// Test removing an empty directory
-	shell.Mkdir("testdir")
+	shell.Mkdir("testdir", false)
 	shell.Remove("testdir", false)
 	assertEqual(t, 0, len(shell.Cwd.Children), "Expected empty directory to be removed")
 
 	// Test removing a directory with children (recursive)
-	shell.Mkdir("testdir")
+	shell.Mkdir("testdir", false)
 	shell.Cd("testdir")
-	shell.Mkdir("nested")
+	shell.Mkdir("nested", false)
 	shell.Cd("..") // Go back to parent
 	shell.Remove("testdir", true)
 	assertEqual(t, 0, len(shell.Cwd.Children), "Expected testdir to be removed (recursive)")
@@ -118,7 +161,7 @@ func TestCreateNewFile(t *testing.T) {
 	assertEqual(t, "file2.txt", shell.Cwd.Children[1].Name, "Expected file name to be 'file2.txt'")
 
 	// Create a file in a nested directory using relative path
-	shell.Mkdir("subdir")
+	shell.Mkdir("subdir", false)
 	shell.Touch("subdir/file3.txt")
 	shell.Cd("subdir")
 	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in subdir")
@@ -132,9 +175,9 @@ func TestCreateNewFile(t *testing.T) {
 
 	// Create a file in deeply nested directory using absolute path
 	shell.Cd("/") // Ensure we're in root
-	shell.Mkdir("dir1")
+	shell.Mkdir("dir1", false)
 	shell.Cd("dir1")
-	shell.Mkdir("dir2")
+	shell.Mkdir("dir2", false)
 	shell.Cd("dir2")
 	shell.Touch("file5.txt")
 	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in dir2")
@@ -157,7 +200,7 @@ func TestRedirectFileContents(t *testing.T) {
 	assertEqual(t, "New content appended", string(shell.Cwd.Children[0].Content), "Expected content to be appended")
 
 	// Test writing to a new file in a subdirectory
-	shell.Mkdir("subdir")
+	shell.Mkdir("subdir", false)
 	shell.Cd("subdir")
 	shell.RedirectWrite("file2.txt", "In subdirectory", false)
 	assertEqual(t, "In subdirectory", string(shell.Cwd.Children[0].Content), "Expected file content in subdirectory")
@@ -188,7 +231,7 @@ func TestCat(t *testing.T) {
 	assertEqual(t, "", content, "Expected empty string for non-existent file")
 
 	// Test reading directory
-	shell.Mkdir("testdir")
+	shell.Mkdir("testdir", false)
 	content = shell.Cat("testdir")
 	assertEqual(t, "", content, "Expected empty string when reading directory")
 
@@ -203,7 +246,7 @@ func TestCat(t *testing.T) {
 	assertEqual(t, "Hello, world!", content, "Expected file content to be 'Hello, world!'")
 
 	// Test reading file in subdirectory
-	shell.Mkdir("subdir")
+	shell.Mkdir("subdir", false)
 	shell.Cd("subdir")
 	shell.RedirectWrite("nested.txt", "Nested content", false)
 	content = shell.Cat("nested.txt")
@@ -227,14 +270,14 @@ func TestFind(t *testing.T) {
 	assertEqual(t, "/root.txt", result, "Expected to find file in root directory")
 
 	// Test finding file in subdirectory
-	shell.Mkdir("subdir")
+	shell.Mkdir("subdir", false)
 	shell.Cd("subdir")
 	shell.RedirectWrite("sub.txt", "sub content", false)
 	result = shell.Find("sub.txt")
 	assertEqual(t, "/subdir/sub.txt", result, "Expected to find file in subdirectory")
 
 	// Test finding directory
-	shell.Mkdir("nested")
+	shell.Mkdir("nested", false)
 	result = shell.Find("nested")
 	assertEqual(t, "/subdir/nested", result, "Expected to find directory")
 
@@ -244,7 +287,7 @@ func TestFind(t *testing.T) {
 
 	// Test finding multiple files with same name
 	shell.Cd("..")
-	shell.Mkdir("other")
+	shell.Mkdir("other", false)
 	shell.Cd("other")
 	shell.RedirectWrite("sub.txt", "other sub content", false)
 	result = shell.Find("sub.txt")
@@ -267,8 +310,8 @@ func TestList(t *testing.T) {
 	// Test directory with files and subdirectories
 	shell.RedirectWrite("file1.txt", "content1", false)
 	shell.RedirectWrite("file2.txt", "content2", false)
-	shell.Mkdir("dir1")
-	shell.Mkdir("dir2")
+	shell.Mkdir("dir1", false)
+	shell.Mkdir("dir2", false)
 
 	files = shell.Ls()
 	assertEqual(t, 4, len(files), "Expected 4 items in directory")
@@ -312,11 +355,11 @@ func TestPathResolution(t *testing.T) {
 	shell := NewShell()
 
 	// Setup directory structure
-	shell.Mkdir("dir1")
+	shell.Mkdir("dir1", false)
 	shell.Cd("dir1")
-	shell.Mkdir("dir2")
+	shell.Mkdir("dir2", false)
 	shell.Cd("dir2")
-	shell.Mkdir("dir3")
+	shell.Mkdir("dir3", false)
 	shell.Cd("/") // Go back to root
 
 	// Test absolute path navigation
@@ -366,8 +409,8 @@ func TestMove(t *testing.T) {
 	shell := NewShell()
 
 	// Create destination directories first
-	shell.Mkdir("dir1")
-	shell.Mkdir("dir2")
+	shell.Mkdir("dir1", false)
+	shell.Mkdir("dir2", false)
 
 	// Test moving a file
 	shell.Touch("file1.txt")
@@ -430,7 +473,7 @@ func TestMove(t *testing.T) {
 	assertEqual(t, "file2.txt", fileName, "Expected file to remain in place")
 
 	// Test moving a directory with contents
-	shell.Mkdir("dir3")
+	shell.Mkdir("dir3", false)
 	shell.Cd("dir3")
 	shell.Touch("nested.txt")
 	shell.RedirectWrite("nested.txt", "nested content", false)
@@ -466,7 +509,7 @@ func TestCopy(t *testing.T) {
 	assertEqual(t, "test content", copyContent, "Expected copied file to have same content")
 
 	// Test copying to a subdirectory
-	shell.Mkdir("dir1")
+	shell.Mkdir("dir1", false)
 	shell.Copy("file1.txt", "dir1/file1.txt")
 	shell.Cd("dir1")
 	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in dir1")
@@ -474,7 +517,7 @@ func TestCopy(t *testing.T) {
 
 	// Test copying a directory
 	shell.Cd("/")
-	shell.Mkdir("dir2")
+	shell.Mkdir("dir2", false)
 	shell.Cd("dir2")
 	shell.Touch("nested.txt")
 	shell.RedirectWrite("nested.txt", "nested content", false)
