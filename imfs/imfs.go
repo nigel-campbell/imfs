@@ -174,7 +174,104 @@ func (s *Shell) RedirectWrite(filename, content string, shouldAppend bool) {
 }
 
 func (s *Shell) Move(source, dest string) {
-	panic("implement me!")
+	if source == "" || dest == "" {
+		fmt.Println("Usage: move <source> <destination>")
+		return
+	}
+
+	// Save current directory
+	originalCwd := s.Cwd
+
+	// Find source file/directory
+	var sourceFile *File
+	var sourceIndex int
+	for i, child := range s.Cwd.Children {
+		if child.Name == source {
+			sourceFile = child
+			sourceIndex = i
+			break
+		}
+	}
+
+	if sourceFile == nil {
+		return // Source doesn't exist
+	}
+
+	// Handle absolute paths
+	if strings.HasPrefix(dest, "/") {
+		s.Cwd = s.Root
+		dest = dest[1:]
+		if dest == "" {
+			return
+		}
+	}
+
+	// Split destination path into components
+	components := strings.Split(dest, "/")
+	currentDir := s.Cwd
+
+	// Navigate to the target directory, but DO NOT create directories
+	for i := 0; i < len(components)-1; i++ {
+		component := components[i]
+		if component == "" {
+			continue
+		}
+
+		if component == ".." {
+			if currentDir.Parent != nil {
+				currentDir = currentDir.Parent
+			}
+			continue
+		}
+
+		found := false
+		for _, child := range currentDir.Children {
+			if child.Name == component && child.IsDirectory {
+				currentDir = child
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			s.Cwd = originalCwd
+			return // Destination directory doesn't exist, abort move
+		}
+	}
+
+	// Get the final component (target name)
+	targetName := components[len(components)-1]
+	if targetName == "" {
+		s.Cwd = originalCwd
+		return
+	}
+
+	// Check if target already exists
+	for _, child := range currentDir.Children {
+		if child.Name == targetName {
+			s.Cwd = originalCwd
+			return // Target already exists
+		}
+	}
+
+	// If we're moving to the same location with the same name, do nothing
+	if currentDir == originalCwd && targetName == sourceFile.Name {
+		s.Cwd = originalCwd
+		return
+	}
+
+	// Remove source from its current location
+	originalCwd.Children = append(originalCwd.Children[:sourceIndex], originalCwd.Children[sourceIndex+1:]...)
+
+	// Update source's parent and name
+	sourceFile.Parent = currentDir
+	sourceFile.Name = targetName
+
+	// Add source to new location
+	currentDir.Children = append(currentDir.Children, sourceFile)
+
+	// Restore original directory
+	s.Cwd = originalCwd
 }
 
 func (s *Shell) Copy(source, dest string) {

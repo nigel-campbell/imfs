@@ -361,3 +361,85 @@ func TestPathResolution(t *testing.T) {
 	// assertEqual(t, "dir2", shell.Cwd.Name, "Expected to correctly resolve complex path")
 	// assertEqual(t, "/dir1/dir2", shell.Pwd(), "Expected path to be '/dir1/dir2'")
 }
+
+func TestMove(t *testing.T) {
+	shell := NewShell()
+
+	// Create destination directories first
+	shell.Mkdir("dir1")
+	shell.Mkdir("dir2")
+
+	// Test moving a file
+	shell.Touch("file1.txt")
+	shell.RedirectWrite("file1.txt", "test content", false)
+	shell.Move("file1.txt", "dir1/file1.txt")
+
+	// Verify file was moved to dir1
+	shell.Cd("dir1")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in dir1")
+	assertEqual(t, "file1.txt", shell.Cwd.Children[0].Name, "Expected file1.txt in dir1")
+	assertEqual(t, "test content", string(shell.Cwd.Children[0].Content), "Expected file content to be preserved")
+
+	// Test moving a directory
+	shell.Cd("/")
+	shell.Move("dir1", "dir2/dir1")
+
+	// Verify directory was moved to dir2
+	shell.Cd("dir2")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one directory in dir2")
+	assertEqual(t, "dir1", shell.Cwd.Children[0].Name, "Expected dir1 in dir2")
+	assertEqual(t, true, shell.Cwd.Children[0].IsDirectory, "Expected dir1 to be a directory")
+
+	// Verify contents of moved directory
+	shell.Cd("dir1")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in moved dir1")
+	assertEqual(t, "file1.txt", shell.Cwd.Children[0].Name, "Expected file1.txt in moved dir1")
+
+	// Test moving non-existent file/directory
+	shell.Cd("/")
+	shell.Move("nonexistent.txt", "dir2/nonexistent.txt")
+	shell.Cd("dir2")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected no new file to be created for non-existent source")
+
+	// Test moving to non-existent destination directory
+	shell.Cd("/")
+	shell.Touch("file2.txt")
+	shell.Move("file2.txt", "nonexistent/file2.txt")
+	// Only count files (not directories) in root
+	fileCount := 0
+	var fileName string
+	for _, child := range shell.Cwd.Children {
+		if !child.IsDirectory {
+			fileCount++
+			fileName = child.Name
+		}
+	}
+	assertEqual(t, 1, fileCount, "Expected file to remain in original location when destination doesn't exist")
+
+	// Test moving a file to its current location (should be idempotent)
+	shell.Move("file2.txt", "file2.txt")
+	fileCount = 0
+	fileName = ""
+	for _, child := range shell.Cwd.Children {
+		if !child.IsDirectory {
+			fileCount++
+			fileName = child.Name
+		}
+	}
+	assertEqual(t, 1, fileCount, "Expected file count to remain the same")
+	assertEqual(t, "file2.txt", fileName, "Expected file to remain in place")
+
+	// Test moving a directory with contents
+	shell.Mkdir("dir3")
+	shell.Cd("dir3")
+	shell.Touch("nested.txt")
+	shell.RedirectWrite("nested.txt", "nested content", false)
+	shell.Cd("/")
+	shell.Move("dir3", "dir2/dir3")
+
+	// Verify directory and its contents were moved correctly
+	shell.Cd("dir2/dir3")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in moved dir3")
+	assertEqual(t, "nested.txt", shell.Cwd.Children[0].Name, "Expected nested.txt in moved dir3")
+	assertEqual(t, "nested content", string(shell.Cwd.Children[0].Content), "Expected nested file content to be preserved")
+}
