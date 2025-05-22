@@ -206,6 +206,9 @@ func (s *Shell) Move(source, dest string) {
 		}
 	}
 
+	// Remove trailing slash if present
+	dest = strings.TrimSuffix(dest, "/")
+
 	// Split destination path into components
 	components := strings.Split(dest, "/")
 	currentDir := s.Cwd
@@ -241,6 +244,32 @@ func (s *Shell) Move(source, dest string) {
 
 	// Get the final component (target name)
 	targetName := components[len(components)-1]
+
+	// Check if the destination is an existing directory
+	var destDir *File
+	for _, child := range currentDir.Children {
+		if child.Name == targetName && child.IsDirectory {
+			destDir = child
+			break
+		}
+	}
+
+	if destDir != nil {
+		// Move into this directory, keep original name
+		for _, c := range destDir.Children {
+			if c.Name == sourceFile.Name {
+				s.Cwd = originalCwd
+				return // Target already exists
+			}
+		}
+		// Remove source from its current location
+		originalCwd.Children = append(originalCwd.Children[:sourceIndex], originalCwd.Children[sourceIndex+1:]...)
+		sourceFile.Parent = destDir
+		destDir.Children = append(destDir.Children, sourceFile)
+		s.Cwd = originalCwd
+		return
+	}
+
 	if targetName == "" {
 		s.Cwd = originalCwd
 		return

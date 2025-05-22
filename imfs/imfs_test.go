@@ -485,6 +485,29 @@ func TestMove(t *testing.T) {
 	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in moved dir3")
 	assertEqual(t, "nested.txt", shell.Cwd.Children[0].Name, "Expected nested.txt in moved dir3")
 	assertEqual(t, "nested content", string(shell.Cwd.Children[0].Content), "Expected nested file content to be preserved")
+
+	// Test moving a file into a directory
+	shell.Cd("/")
+	shell.Touch("source.txt")
+	shell.RedirectWrite("source.txt", "source content", false)
+	shell.Mkdir("target_dir", false)
+	shell.Move("source.txt", "target_dir/")
+
+	// Verify file was moved into directory
+	shell.Cd("target_dir")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in target directory")
+	assertEqual(t, "source.txt", shell.Cwd.Children[0].Name, "Expected source.txt in target directory")
+	assertEqual(t, "source content", string(shell.Cwd.Children[0].Content), "Expected file content to be preserved")
+
+	// Verify file was removed from original location
+	shell.Cd("/")
+	fileCount = 0
+	for _, child := range shell.Cwd.Children {
+		if !child.IsDirectory && child.Name == "source.txt" {
+			fileCount++
+		}
+	}
+	assertEqual(t, 0, fileCount, "Expected source.txt to be removed from original location")
 }
 
 func TestCopy(t *testing.T) {
