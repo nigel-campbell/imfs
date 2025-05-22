@@ -175,7 +175,7 @@ func (s *Shell) RedirectWrite(filename, content string, shouldAppend bool) {
 
 func (s *Shell) Move(source, dest string) {
 	if source == "" || dest == "" {
-		fmt.Println("Usage: move <source> <destination>")
+		fmt.Println("Usage: mv <source> <destination>")
 		return
 	}
 
@@ -656,14 +656,14 @@ func (s *Shell) Run() {
 			fmt.Println(s.Cat(arg))
 		case "clear":
 			s.Clear()
-		case "move":
+		case "mv":
 			parts := strings.SplitN(arg, " ", 2)
 			if len(parts) == 2 {
 				s.Move(parts[0], parts[1])
 			} else {
 				fmt.Println("Usage: move <source> <destination>")
 			}
-		case "copy":
+		case "cp":
 			parts := strings.SplitN(arg, " ", 2)
 			if len(parts) == 2 {
 				s.Copy(parts[0], parts[1])
