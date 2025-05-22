@@ -116,7 +116,6 @@ func (s *Shell) Cd(name string) {
 
 func (s *Shell) Pwd() string {
 	if s.Cwd == s.Root {
-		fmt.Println("/")
 		return "/"
 	}
 
@@ -127,7 +126,6 @@ func (s *Shell) Pwd() string {
 		current = current.Parent
 	}
 	path = "/" + path
-	fmt.Println(path)
 	return path
 }
 
@@ -321,6 +319,11 @@ func (s *Shell) Remove(name string, recursive bool) {
 	s.Cwd.Children = append(s.Cwd.Children[:targetIndex], s.Cwd.Children[targetIndex+1:]...)
 }
 
+func (s *Shell) Clear() {
+	// ANSI escape sequence to clear the screen and move cursor to top-left
+	fmt.Print("\033[H\033[2J")
+}
+
 func (s *Shell) Run() {
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
@@ -344,13 +347,15 @@ func (s *Shell) Run() {
 		case "cd":
 			s.Cd(arg)
 		case "pwd":
-			s.Pwd()
+			fmt.Println(s.Pwd())
 		case "mkdir":
 			s.Mkdir(arg)
 		case "touch":
 			s.Touch(arg)
 		case "cat":
 			s.Cat(arg)
+		case "clear":
+			s.Clear()
 		default:
 			fmt.Println("Unknown command:", cmd)
 		}
