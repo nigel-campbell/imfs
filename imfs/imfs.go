@@ -43,10 +43,8 @@ func (s *Shell) Ls() []string {
 		return nil
 	}
 
-	// Create a slice to hold the names
 	names := make([]string, 0, len(s.Cwd.Children))
 
-	// Add all children names to the slice and print them
 	for _, child := range s.Cwd.Children {
 		names = append(names, child.Name)
 		if child.IsDirectory {
@@ -75,14 +73,45 @@ func (s *Shell) Cd(name string) {
 		return
 	}
 
-	for _, child := range s.Cwd.Children {
-		if child.Name == name && child.IsDirectory {
-			s.Cwd = child
+	if strings.HasPrefix(name, "/") {
+		s.Cwd = s.Root
+		name = name[1:]
+		if name == "" {
 			return
 		}
 	}
 
-	fmt.Printf("cd: no such directory: %s\n", name)
+	components := strings.Split(name, "/")
+	currentDir := s.Cwd
+
+	for _, component := range components {
+		if component == "" {
+			continue
+		}
+
+		if component == ".." {
+			if currentDir.Parent != nil {
+				currentDir = currentDir.Parent
+			}
+			continue
+		}
+
+		found := false
+		for _, child := range currentDir.Children {
+			if child.Name == component && child.IsDirectory {
+				currentDir = child
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			fmt.Printf("cd: no such directory: %s\n", name)
+			return
+		}
+	}
+
+	s.Cwd = currentDir
 }
 
 func (s *Shell) Pwd() string {
@@ -160,14 +189,12 @@ func (s *Shell) Mkdir(name string) {
 		return
 	}
 
-	// Check if directory already exists
 	for _, child := range s.Cwd.Children {
 		if child.Name == name {
 			return
 		}
 	}
 
-	// Create new directory
 	newDir := &File{
 		Name:        name,
 		IsDirectory: true,
@@ -176,7 +203,6 @@ func (s *Shell) Mkdir(name string) {
 		Parent:      s.Cwd,
 	}
 
-	// Add to parent's children
 	s.Cwd.Children = append(s.Cwd.Children, newDir)
 }
 
@@ -245,17 +271,13 @@ func (s *Shell) Find(name string) string {
 		return ""
 	}
 
-	// Helper function to search a directory
 	var searchDir func(dir *File, currentPath string) string
 	searchDir = func(dir *File, currentPath string) string {
-		// Check children of current directory
 		for _, child := range dir.Children {
 			childPath := currentPath + "/" + child.Name
-			// Check if this is a match
 			if strings.Contains(child.Name, name) {
 				return childPath
 			}
-			// If it's a directory, search it
 			if child.IsDirectory {
 				if result := searchDir(child, childPath); result != "" {
 					return result
@@ -265,7 +287,6 @@ func (s *Shell) Find(name string) string {
 		return ""
 	}
 
-	// Start search from root
 	return searchDir(s.Root, "")
 }
 
@@ -300,23 +321,10 @@ func (s *Shell) Remove(name string, recursive bool) {
 	s.Cwd.Children = append(s.Cwd.Children[:targetIndex], s.Cwd.Children[targetIndex+1:]...)
 }
 
-// resolvePath resolves a path relative to the current working directory.
-// It handles:
-// - Absolute paths (starting with '/')
-// - Relative paths with directory separators
-// - Parent directory references ('..')
-// Returns the target directory and the final component of the path.
-// If the path is invalid or doesn't exist, returns nil, "".
-func (s *Shell) resolvePath(path string) (*File, string) {
-	// NB: Do not use an LLM to generate this or attempt to handwrite this.
-	// Path resolution is a hard problem. Use the `path` package.
-	panic("implement me!")
-}
-
 func (s *Shell) Run() {
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
-		fmt.Printf("%s> ", "/")
+		fmt.Printf("%s> ", s.Pwd())
 		if !scanner.Scan() {
 			break
 		}

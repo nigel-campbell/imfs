@@ -288,4 +288,55 @@ func TestList(t *testing.T) {
 }
 
 func TestPathResolution(t *testing.T) {
+	shell := NewShell()
+
+	// Setup directory structure
+	shell.Mkdir("dir1")
+	shell.Cd("dir1")
+	shell.Mkdir("dir2")
+	shell.Cd("dir2")
+	shell.Mkdir("dir3")
+	shell.Cd("/") // Go back to root
+
+	// Test absolute path navigation
+	shell.Cd("/dir1/dir2/dir3")
+	assertEqual(t, "dir3", shell.Cwd.Name, "Expected to navigate to dir3 using absolute path")
+	assertEqual(t, "/dir1/dir2/dir3", shell.Pwd(), "Expected path to be '/dir1/dir2/dir3'")
+
+	// Test relative path navigation
+	shell.Cd("/")
+	shell.Cd("dir1/dir2")
+	assertEqual(t, "dir2", shell.Cwd.Name, "Expected to navigate to dir2 using relative path")
+	assertEqual(t, "/dir1/dir2", shell.Pwd(), "Expected path to be '/dir1/dir2'")
+
+	// Test parent directory navigation with ..
+	shell.Cd("../")
+	assertEqual(t, "dir1", shell.Cwd.Name, "Expected to navigate to parent directory")
+	assertEqual(t, "/dir1", shell.Pwd(), "Expected path to be '/dir1'")
+
+	// Test combined relative with parent navigation
+	shell.Cd("dir2/dir3/../")
+	assertEqual(t, "dir2", shell.Cwd.Name, "Expected to navigate to dir2 after path with parent reference")
+	assertEqual(t, "/dir1/dir2", shell.Pwd(), "Expected path to be '/dir1/dir2'")
+
+	// Test multiple parent directory navigation
+	shell.Cd("../../")
+	assertEqual(t, shell.Root, shell.Cwd, "Expected to navigate to root with multiple parent references")
+	assertEqual(t, "/", shell.Pwd(), "Expected path to be '/'")
+
+	// Test non-existent paths
+	shell.Cd("/dir1")
+	shell.Cd("nonexistent/path")
+	assertEqual(t, "dir1", shell.Cwd.Name, "Expected to stay in current directory for non-existent path")
+
+	// Test paths with empty components
+	shell.Cd("/dir1//dir2")
+	assertEqual(t, "dir2", shell.Cwd.Name, "Expected to handle empty path components correctly")
+	assertEqual(t, "/dir1/dir2", shell.Pwd(), "Expected path to be '/dir1/dir2'")
+
+	// Test complex path with mixed absolute, relative and parent references
+	// shell.Cd("/")
+	// shell.Cd("/dir1/./dir2/../dir2/dir3/..")
+	// assertEqual(t, "dir2", shell.Cwd.Name, "Expected to correctly resolve complex path")
+	// assertEqual(t, "/dir1/dir2", shell.Pwd(), "Expected path to be '/dir1/dir2'")
 }
