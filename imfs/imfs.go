@@ -89,6 +89,7 @@ func (s *Shell) Cd(name string) {
 			continue
 		}
 
+		// TODO(nigel): Why is this necessary? Can this be removed?
 		if component == ".." {
 			if currentDir.Parent != nil {
 				currentDir = currentDir.Parent
@@ -146,10 +147,9 @@ func (s *Shell) RedirectWrite(filename, content string, shouldAppend bool) {
 	}
 
 	if targetFile == nil {
-		// Check if there's a directory with this name before creating a new file
 		for _, child := range s.Cwd.Children {
 			if child.Name == filename && child.IsDirectory {
-				return // Can't create a file with the same name as a directory
+				return
 			}
 		}
 
@@ -210,24 +210,71 @@ func (s *Shell) Touch(name string) {
 		return
 	}
 
-	// TODO(nigel): Replace with a map.
-	for _, child := range s.Cwd.Children {
-		if child.Name == name {
+	// Handle absolute paths
+	if strings.HasPrefix(name, "/") {
+		s.Cwd = s.Root
+		name = name[1:]
+		if name == "" {
+			return
+		}
+	}
+
+	components := strings.Split(name, "/")
+	currentDir := s.Cwd
+
+	// Navigate to the target directory
+	for i := 0; i < len(components)-1; i++ {
+		component := components[i]
+		if component == "" {
+			continue
+		}
+
+		if component == ".." {
+			if currentDir.Parent != nil {
+				currentDir = currentDir.Parent
+			}
+			continue
+		}
+
+		found := false
+		for _, child := range currentDir.Children {
+			if child.Name == component && child.IsDirectory {
+				currentDir = child
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			fmt.Printf("touch: no such directory: %s\n", name)
+			return
+		}
+	}
+
+	// Get the final component (file name)
+	filename := components[len(components)-1]
+	if filename == "" {
+		return
+	}
+
+	// Check if file already exists
+	for _, child := range currentDir.Children {
+		if child.Name == filename {
 			// Update modification time if file exists
-			// TODO(nigel): Is this necessary?
 			child.ModifiedAt = time.Now()
 			return
 		}
 	}
 
+	// Create new file
 	newFile := &File{
-		Name:        name,
+		Name:        filename,
 		IsDirectory: false,
 		CreatedAt:   time.Now(),
 		ModifiedAt:  time.Now(),
-		Parent:      s.Cwd,
+		Parent:      currentDir,
 	}
-	s.Cwd.Children = append(s.Cwd.Children, newFile)
+	currentDir.Children = append(currentDir.Children, newFile)
 }
 
 func (s *Shell) Cat(name string) string {
@@ -294,7 +341,6 @@ func (s *Shell) Remove(name string, recursive bool) {
 		return
 	}
 
-	// Find the file/directory to remove
 	var target *File
 	var targetIndex int
 	for i, child := range s.Cwd.Children {
@@ -306,16 +352,14 @@ func (s *Shell) Remove(name string, recursive bool) {
 	}
 
 	if target == nil {
-		return // File/directory doesn't exist
+		return
 	}
 
-	// Check if trying to remove a non-empty directory without recursive flag
 	if target.IsDirectory && len(target.Children) > 0 && !recursive {
 		fmt.Printf("Cannot remove '%s': Directory not empty\n", name)
 		return
 	}
 
-	// Remove from parent's children
 	s.Cwd.Children = append(s.Cwd.Children[:targetIndex], s.Cwd.Children[targetIndex+1:]...)
 }
 

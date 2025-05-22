@@ -98,7 +98,7 @@ func TestRemoveDirectory(t *testing.T) {
 func TestCreateNewFile(t *testing.T) {
 	shell := NewShell()
 
-	// Create a new file
+	// Create a new file in current directory
 	shell.Touch("file1.txt")
 	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in root directory")
 	assertEqual(t, "file1.txt", shell.Cwd.Children[0].Name, "Expected file name to be 'file1.txt'")
@@ -112,12 +112,33 @@ func TestCreateNewFile(t *testing.T) {
 	shell.Touch("")
 	assertEqual(t, 1, len(shell.Cwd.Children), "Expected no file to be created for empty name")
 
-	// Create a file in a nested directory
+	// Create a file using absolute path
+	shell.Touch("/file2.txt")
+	assertEqual(t, 2, len(shell.Cwd.Children), "Expected two files in root directory")
+	assertEqual(t, "file2.txt", shell.Cwd.Children[1].Name, "Expected file name to be 'file2.txt'")
+
+	// Create a file in a nested directory using relative path
 	shell.Mkdir("subdir")
+	shell.Touch("subdir/file3.txt")
 	shell.Cd("subdir")
-	shell.Touch("file2.txt")
 	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in subdir")
-	assertEqual(t, "file2.txt", shell.Cwd.Children[0].Name, "Expected file name to be 'file2.txt'")
+	assertEqual(t, "file3.txt", shell.Cwd.Children[0].Name, "Expected file name to be 'file3.txt'")
+
+	// Create a file in parent directory using relative path
+	shell.Touch("../file4.txt")
+	shell.Cd("..")
+	assertEqual(t, 4, len(shell.Cwd.Children), "Expected four files in root directory")
+	assertEqual(t, "file4.txt", shell.Cwd.Children[3].Name, "Expected file name to be 'file4.txt'")
+
+	// Create a file in deeply nested directory using absolute path
+	shell.Cd("/") // Ensure we're in root
+	shell.Mkdir("dir1")
+	shell.Cd("dir1")
+	shell.Mkdir("dir2")
+	shell.Cd("dir2")
+	shell.Touch("file5.txt")
+	assertEqual(t, 1, len(shell.Cwd.Children), "Expected one file in dir2")
+	assertEqual(t, "file5.txt", shell.Cwd.Children[0].Name, "Expected file name to be 'file5.txt'")
 }
 
 func TestRedirectFileContents(t *testing.T) {
